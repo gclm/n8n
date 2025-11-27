@@ -188,17 +188,43 @@ describe('WorkflowExecuteAdditionalData', () => {
 				waitTill,
 			});
 		});
+
+		it('should pass workflowId to getBase when executing subworkflow', async () => {
+			const getVariablesSpy = jest.spyOn(WorkflowHelpers, 'getVariables');
+			const workflowId = 'test-workflow-123';
+
+			const workflowWithId = mock<WorkflowEntity>({
+				id: workflowId,
+				name: 'Test Workflow',
+				active: false,
+				activeVersionId: null,
+				activeVersion: null,
+				nodes: [],
+				connections: {},
+			});
+
+			workflowRepository.get.mockResolvedValueOnce(workflowWithId);
+
+			await executeWorkflow(
+				mock<IExecuteWorkflowInfo>({ id: workflowId }),
+				mock<IWorkflowExecuteAdditionalData>(),
+				mock<ExecuteWorkflowOptions>({ loadedWorkflowData: undefined, doNotWaitToFinish: false }),
+			);
+
+			expect(getVariablesSpy).toHaveBeenCalledWith(workflowId, undefined);
+		});
 	});
 
 	describe('getRunData', () => {
-		it('should throw error to add trigger ndoe', async () => {
+		it('should throw error to add trigger ndoe', () => {
 			const workflow = mock<IWorkflowBase>({
 				id: '1',
 				name: 'test',
 				nodes: [],
 				active: false,
 			});
-			await expect(getRunData(workflow)).rejects.toThrowError('Missing node to start execution');
+
+			expect(() => getRunData(workflow)).toThrowError('Missing node to start execution');
 		});
 
 		const workflow = mock<IWorkflowBase>({
@@ -212,8 +238,8 @@ describe('WorkflowExecuteAdditionalData', () => {
 			active: false,
 		});
 
-		it('should return default data', async () => {
-			expect(await getRunData(workflow)).toEqual({
+		it('should return default data', () => {
+			expect(getRunData(workflow)).toEqual({
 				executionData: {
 					executionData: {
 						contextData: {},
@@ -229,7 +255,13 @@ describe('WorkflowExecuteAdditionalData', () => {
 						waitingExecution: {},
 						waitingExecutionSource: {},
 					},
-					resultData: { runData: {} },
+					resultData: {
+						error: undefined,
+						lastNodeExecuted: undefined,
+						metadata: undefined,
+						pinData: undefined,
+						runData: {},
+					},
 					startData: {},
 				},
 				executionMode: 'integrated',
@@ -237,13 +269,13 @@ describe('WorkflowExecuteAdditionalData', () => {
 			});
 		});
 
-		it('should return run data with input data and metadata', async () => {
+		it('should return run data with input data and metadata', () => {
 			const data = [{ json: { test: 1 } }];
 			const parentExecution = {
 				executionId: '123',
 				workflowId: '567',
 			};
-			expect(await getRunData(workflow, data, parentExecution)).toEqual({
+			expect(getRunData(workflow, data, parentExecution)).toEqual({
 				executionData: {
 					executionData: {
 						contextData: {},
