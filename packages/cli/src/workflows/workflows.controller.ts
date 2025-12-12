@@ -1,4 +1,9 @@
-import { ImportWorkflowFromUrlDto, ROLE, TransferWorkflowBodyDto } from '@n8n/api-types';
+import {
+	ActivateWorkflowDto,
+	ImportWorkflowFromUrlDto,
+	ROLE,
+	TransferWorkflowBodyDto,
+} from '@n8n/api-types';
 import { Logger } from '@n8n/backend-common';
 import { GlobalConfig } from '@n8n/config';
 import type { Project } from '@n8n/db';
@@ -95,6 +100,18 @@ export class WorkflowsController {
 		// @ts-expect-error: We shouldn't accept this because it can
 		// mess with relations of other workflows
 		delete req.body.shared;
+
+		// @ts-expect-error: We shouldn't accept this, this will be set when activating
+		if (req.body.activeVersionId || req.body.active) {
+			this.logger.warn(
+				'Creating a workflow as active is not supported. The workflow will be created as inactive.',
+				{ userId: req.user.id },
+			);
+
+			// @ts-expect-error: We shouldn't accept this
+			req.body.activeVersionId = undefined;
+			req.body.active = false;
+		}
 
 		const newWorkflow = new WorkflowEntity();
 
@@ -404,7 +421,7 @@ export class WorkflowsController {
 		const forceSave = req.query.forceSave === 'true';
 
 		let updateData = new WorkflowEntity();
-		const { tags, parentFolderId, ...rest } = req.body;
+		const { tags, parentFolderId, expectedChecksum, ...rest } = req.body;
 
 		// TODO: Add zod validation for entire `rest` object before assigning to `updateData`
 		if (
@@ -429,6 +446,7 @@ export class WorkflowsController {
 			tagIds: tags,
 			parentFolderId,
 			forceSave: isSharingEnabled ? forceSave : true,
+			expectedChecksum,
 		});
 
 		const scopes = await this.workflowService.getWorkflowScopes(req.user, workflowId);
@@ -497,18 +515,19 @@ export class WorkflowsController {
 
 	@Post('/:workflowId/activate')
 	@ProjectScope('workflow:update')
-	async activate(req: WorkflowRequest.Activate) {
-		const { workflowId } = req.params;
-		const { versionId, name, description } = req.body;
-
-		if (!versionId) {
-			throw new BadRequestError('versionId is required');
-		}
+	async activate(
+		req: WorkflowRequest.Activate,
+		_res: unknown,
+		@Param('workflowId') workflowId: string,
+		@Body body: ActivateWorkflowDto,
+	) {
+		const { versionId, name, description, expectedChecksum } = body;
 
 		const workflow = await this.workflowService.activateWorkflow(req.user, workflowId, {
 			versionId,
 			name,
 			description,
+			expectedChecksum,
 		});
 
 		const scopes = await this.workflowService.getWorkflowScopes(req.user, workflowId);
