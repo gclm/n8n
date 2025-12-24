@@ -32,12 +32,12 @@ import { TelemetryEventRelay } from '@/events/relays/telemetry.event-relay';
 import { ExternalHooks } from '@/external-hooks';
 import { initEnterpriseMock } from '@/init-enterprise-mock';
 import { License } from '@/license';
-import { LoadNodesAndCredentials } from '@/load-nodes-and-credentials';
 import { CommunityPackagesConfig } from '@/modules/community-packages/community-packages.config';
 import { NodeTypes } from '@/node-types';
 import { PostHogClient } from '@/posthog';
 import { ShutdownService } from '@/shutdown/shutdown.service';
 import { WorkflowHistoryManager } from '@/workflows/workflow-history/workflow-history-manager';
+import { LoadNodesAndCredentials } from '@/load-nodes-and-credentials';
 
 export abstract class BaseCommand<F = never> {
 	readonly flags: F;
@@ -100,7 +100,6 @@ export abstract class BaseCommand<F = never> {
 
 		this.nodeTypes = Container.get(NodeTypes);
 
-		await this.executionContextHookRegistry.init();
 		await Container.get(LoadNodesAndCredentials).init();
 
 		await this.dbConnection
