@@ -8,13 +8,19 @@
  */
 
 import type { BooleanLicenseFeature } from '@n8n/constants';
-import { LICENSE_FEATURES, LICENSE_QUOTAS, UNLIMITED_LICENSE_QUOTA } from '@n8n/constants';
+import { LICENSE_FEATURES, LICENSE_QUOTAS, UNLIMITED_LICENSE_QUOTA, Time } from '@n8n/constants';
 
 import type { License } from '@/license';
 
 export class EnterpriseLicenseMocker {
 	private static instance: EnterpriseLicenseMocker;
 	private originalMethods: Map<string, unknown> = new Map();
+
+	/** Timestamp of last reload to prevent infinite loops caused by onExpirySoon */
+	private lastReloadAt = 0;
+
+	/** Minimum interval between reloads (72 hours in milliseconds) */
+	private readonly reloadIntervalMs = 72 * Time.hours.toMilliseconds;
 
 	static getInstance(): EnterpriseLicenseMocker {
 		if (!EnterpriseLicenseMocker.instance) {
@@ -30,6 +36,23 @@ export class EnterpriseLicenseMocker {
 		// 保存原始方法以便恢复
 		this.originalMethods.set('isLicensed', license.isLicensed.bind(license));
 		this.originalMethods.set('getValue', license.getValue.bind(license));
+		this.originalMethods.set('reload', license.reload.bind(license));
+
+		// 覆盖 reload 方法，添加防抖逻辑防止 onExpirySoon 导致的无限循环
+		// 问题：当 license 即将过期时，SDK 会触发 onExpirySoon -> reload -> onExpirySoon 形成无限循环
+		const originalReload = this.originalMethods.get('reload') as typeof license.reload;
+		license.reload = async (): Promise<void> => {
+			const now = Date.now();
+			if (now - this.lastReloadAt < this.reloadIntervalMs) {
+				console.log(
+					'[ENTERPRISE MOCK] Skipping license reload: already reloaded recently (debounce)',
+				);
+				return;
+			}
+			this.lastReloadAt = now;
+			console.log('[ENTERPRISE MOCK] License reload triggered');
+			return await originalReload();
+		};
 
 		// 模拟许可证检查 - 所有功能都返回true，除了SHOW_NON_PROD_BANNER
 		license.isLicensed = (feature: BooleanLicenseFeature): boolean => {
@@ -119,7 +142,12 @@ export class EnterpriseLicenseMocker {
 			const originalGetValue = this.originalMethods.get('getValue') as typeof license.getValue;
 			license.getValue = originalGetValue;
 		}
+		if (this.originalMethods.has('reload')) {
+			const originalReload = this.originalMethods.get('reload') as typeof license.reload;
+			license.reload = originalReload;
+		}
 		this.originalMethods.clear();
+		this.lastReloadAt = 0;
 		console.log('[ENTERPRISE MOCK] Original license methods restored');
 	}
 
