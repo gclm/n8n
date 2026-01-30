@@ -1,3 +1,21 @@
+## [2.4.8](https://github.com/n8n-io/n8n/compare/n8n@2.4.7...n8n@2.4.8) (2026-01-29)
+
+
+### Bug Fixes
+
+* **core:** Use fsRealpath instead of resolve to get the real path ([#24185](https://github.com/n8n-io/n8n/issues/24185)) ([5c69970](https://github.com/n8n-io/n8n/commit/5c69970acc7d37049deae67da861f92d2aaa9b03))
+
+
+
+## [2.4.7](https://github.com/n8n-io/n8n/compare/n8n@2.4.6...n8n@2.4.7) (2026-01-28)
+
+
+### Features
+
+* **Zendesk Trigger Node:** Add webhook signature verification ([#24881](https://github.com/n8n-io/n8n/issues/24881)) ([dad522a](https://github.com/n8n-io/n8n/commit/dad522a2269312285c808e4824e62a9b3e703b34))
+
+
+
 ## [2.4.6](https://github.com/n8n-io/n8n/compare/n8n@2.4.5...n8n@2.4.6) (2026-01-23)
 
 
