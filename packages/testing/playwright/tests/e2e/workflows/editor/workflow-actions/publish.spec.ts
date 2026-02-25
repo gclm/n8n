@@ -5,7 +5,11 @@ import {
 } from '../../../../../config/constants';
 import { test, expect } from '../../../../../fixtures/base';
 
-test.describe('Workflow Publish', () => {
+test.describe('Workflow Publish', {
+	annotation: [
+		{ type: 'owner', description: 'Adore' },
+	],
+}, () => {
 	test.beforeEach(async ({ n8n }) => {
 		await n8n.start.fromBlankCanvas();
 	});
@@ -21,7 +25,7 @@ test.describe('Workflow Publish', () => {
 		await n8n.canvas.addNode(SCHEDULE_TRIGGER_NODE_NAME, { closeNDV: true });
 		await n8n.canvas.waitForSaveWorkflowCompleted();
 
-		await expect(n8n.canvas.getPublishedIndicator()).not.toBeVisible();
+		await expect(n8n.canvas.getPublishedIndicator()).toBeHidden();
 
 		await n8n.canvas.publishWorkflow();
 
