@@ -35,9 +35,9 @@ import {
 	type WorkflowState,
 } from '@/app/composables/useWorkflowState';
 import {
-	createWorkflowDocumentId,
 	useWorkflowDocumentStore,
-} from '../stores/workflowDocument.store';
+	createWorkflowDocumentId,
+} from '@/app/stores/workflowDocument.store';
 
 vi.mock('@/app/composables/useWorkflowState', async () => {
 	const actual = await vi.importActual('@/app/composables/useWorkflowState');
@@ -70,6 +70,7 @@ describe('useWorkflowHelpers', () => {
 
 	afterEach(() => {
 		vi.clearAllMocks();
+		workflowsStore.workflowId = '';
 	});
 
 	describe('getNodeParametersWithResolvedExpressions', () => {
@@ -249,7 +250,6 @@ describe('useWorkflowHelpers', () => {
 			const setWorkflowIdSpy = vi.spyOn(workflowState, 'setWorkflowId');
 			const setWorkflowNameSpy = vi.spyOn(workflowState, 'setWorkflowName');
 			const setWorkflowSettingsSpy = vi.spyOn(workflowState, 'setWorkflowSettings');
-			const setWorkflowPinDataSpy = vi.spyOn(workflowState, 'setWorkflowPinData');
 			const setWorkflowVersionDataSpy = vi.spyOn(workflowsStore, 'setWorkflowVersionData');
 			const setWorkflowMetadataSpy = vi.spyOn(workflowState, 'setWorkflowMetadata');
 			const setWorkflowScopesSpy = vi.spyOn(workflowState, 'setWorkflowScopes');
@@ -270,7 +270,6 @@ describe('useWorkflowHelpers', () => {
 				executionOrder: 'v1',
 				timezone: 'DEFAULT',
 			});
-			expect(setWorkflowPinDataSpy).toHaveBeenCalledWith({});
 			expect(setWorkflowVersionDataSpy).toHaveBeenCalledWith(
 				{ versionId: 'v1', name: null, description: null },
 				'checksum',
@@ -1027,9 +1026,13 @@ describe('useWorkflowHelpers', () => {
 			const inputName = 'main';
 			const runIndex = 0;
 
-			workflowsStore.pinnedWorkflowData = {
+			workflowsStore.workflowId = 'test-workflow';
+			const workflowDocumentStore = useWorkflowDocumentStore(
+				createWorkflowDocumentId('test-workflow'),
+			);
+			vi.mocked(workflowDocumentStore.getPinDataSnapshot).mockReturnValue({
 				ParentNode: [{ json: { key: 'value' } }],
-			};
+			});
 
 			const result = executeData({}, parentNodes, currentNode, inputName, runIndex);
 
@@ -1045,7 +1048,6 @@ describe('useWorkflowHelpers', () => {
 			const inputName = 'main';
 			const runIndex = 0;
 
-			workflowsStore.pinnedWorkflowData = undefined;
 			workflowsStore.getWorkflowRunData = {
 				ParentNode: [
 					{
@@ -1085,7 +1087,6 @@ describe('useWorkflowHelpers', () => {
 			const runIndex = 0;
 			const parentRunIndex = 1;
 
-			workflowsStore.pinnedWorkflowData = undefined;
 			workflowsStore.getWorkflowRunData = {
 				ParentNode: [
 					{ data: {} } as never,
@@ -1127,7 +1128,6 @@ describe('useWorkflowHelpers', () => {
 			const inputName = 'main';
 			const runIndex = 0;
 
-			workflowsStore.pinnedWorkflowData = undefined;
 			workflowsStore.getWorkflowRunData = null;
 
 			const result = executeData({}, parentNodes, currentNode, inputName, runIndex);

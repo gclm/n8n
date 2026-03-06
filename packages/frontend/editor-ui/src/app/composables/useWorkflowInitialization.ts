@@ -85,16 +85,18 @@ export function useWorkflowInitialization(workflowState: WorkflowState) {
 		}
 	}
 
-	const workflowId = computed(() => {
-		const name = route.params.name;
-		return (Array.isArray(name) ? name[0] : name) ?? '';
-	});
-
 	const isNewWorkflowRoute = computed(() => route.query.new === 'true');
 	const isDemoRoute = computed(() => route.name === VIEWS.DEMO);
 	const isTemplateRoute = computed(() => route.name === VIEWS.TEMPLATE_IMPORT);
 	const isOnboardingRoute = computed(() => route.name === VIEWS.WORKFLOW_ONBOARDING);
 	const isDebugRoute = computed(() => route.name === VIEWS.EXECUTION_DEBUG);
+
+	const workflowId = computed(() => {
+		if (isDemoRoute.value) return 'demo';
+
+		const name = route.params.name;
+		return (Array.isArray(name) ? name[0] : name) ?? '';
+	});
 
 	async function loadCredentials() {
 		let options: { workflowId: string } | { projectId: string };
@@ -128,6 +130,17 @@ export function useWorkflowInitialization(workflowState: WorkflowState) {
 		if (!templateId) return false;
 
 		disposeCurrentWorkflowDocumentStore();
+
+		// Load credentials and credential types for template import
+		try {
+			await Promise.all([loadCredentials(), credentialsStore.fetchCredentialTypes(true)]);
+		} catch (error) {
+			toast.showError(
+				error,
+				i18n.baseText('nodeView.showError.mounted1.title'),
+				i18n.baseText('nodeView.showError.mounted1.message') + ':',
+			);
+		}
 
 		const loadWorkflowFromJSON = route.query.fromJson === 'true';
 
