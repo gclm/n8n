@@ -1,5 +1,7 @@
+import { getOctokit } from '@actions/github';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import path from 'node:path';
 import semver from 'semver';
 
 export const RELEASE_TRACKS = /** @type { const } */ ([
@@ -8,6 +10,10 @@ export const RELEASE_TRACKS = /** @type { const } */ ([
 	'beta',
 	'v1',
 ]);
+
+/**
+ * @typedef { InstanceType<typeof import("@actions/github/lib/utils").GitHub> } GitHubInstance
+ * */
 
 /**
  * @typedef {typeof RELEASE_TRACKS[number]} ReleaseTrack
@@ -43,6 +49,15 @@ export function pickHighestReleaseTag(tags) {
 		.sort((a, b) => semver.rcompare(a.v, b.v));
 
 	return /** @type { ReleaseVersion } */ (versions[0]?.tag) ?? null;
+}
+
+/**
+ * @param {any} track
+ *
+ * @returns { track is ReleaseTrack }
+ * */
+export function isReleaseTrack(track) {
+	return RELEASE_TRACKS.includes(track);
 }
 
 /**
@@ -117,6 +132,14 @@ export function stripReleasePrefixes(tag) {
 	);
 }
 
+export function getEventFromGithubEventPath() {
+	let eventPath = ensureEnvVar('GITHUB_EVENT_PATH');
+	if (!path.isAbsolute(eventPath)) {
+		eventPath = import.meta.dirname + '/' + eventPath;
+	}
+	return JSON.parse(fs.readFileSync(eventPath, 'utf8'));
+}
+
 /**
  * @param {any} [pullRequest] Optional pull request object. If not provided, reads from GITHUB_EVENT_PATH
  *
@@ -124,8 +147,7 @@ export function stripReleasePrefixes(tag) {
  */
 export function readPrLabels(pullRequest) {
 	if (!pullRequest) {
-		const eventPath = ensureEnvVar('GITHUB_EVENT_PATH');
-		const event = JSON.parse(fs.readFileSync(eventPath, 'utf8'));
+		const event = getEventFromGithubEventPath();
 		pullRequest = event.pull_request;
 	}
 	/** @type { string[] | { name: string }[] } */
@@ -230,4 +252,89 @@ export function listTagsPointingAt(commit) {
 		.split('\n')
 		.map((s) => s.trim())
 		.filter(Boolean);
+}
+
+/**
+ * @param {string} branch
+ */
+export function remoteBranchExists(branch) {
+	const res = trySh('git', ['ls-remote', '--heads', 'origin', branch]);
+	return res.ok && res.out.length > 0;
+}
+
+/**
+ * @param {string} ref
+ */
+export function localRefExists(ref) {
+	const res = trySh('git', ['show-ref', '--verify', '--quiet', ref]);
+	return res.ok;
+}
+
+/**
+ * Initializes octokit with GITHUB_TOKEN from env vars.
+ *
+ * Also ensures the existence of useful environment variables.
+ * */
+export function initGithub() {
+	const token = ensureEnvVar('GITHUB_TOKEN');
+	const repoFullName = ensureEnvVar('GITHUB_REPOSITORY');
+
+	const [owner, repo] = repoFullName.split('/');
+
+	const octokit = getOctokit(token);
+
+	return {
+		octokit,
+		owner,
+		repo,
+	};
+}
+
+/**
+ * @param {number} pullRequestId
+ */
+export async function getPullRequestById(pullRequestId) {
+	const { octokit, owner, repo } = initGithub();
+
+	const pullRequest = await octokit.rest.pulls.get({
+		owner,
+		repo,
+		pull_number: pullRequestId,
+	});
+
+	return pullRequest.data;
+}
+
+/**
+ * @param {string} tag
+ */
+export async function getExistingRelease(tag) {
+	const { octokit, owner, repo } = initGithub();
+
+	try {
+		const releaseRequest = await octokit.rest.repos.getReleaseByTag({
+			owner,
+			repo,
+			tag,
+		});
+
+		return releaseRequest.data;
+	} catch (ex) {
+		if (ex?.status === 404) {
+			return undefined;
+		}
+		throw ex;
+	}
+}
+
+/**
+ * @param {number} releaseId
+ */
+export async function deleteRelease(releaseId) {
+	const { octokit, owner, repo } = initGithub();
+	await octokit.rest.repos.deleteRelease({
+		owner,
+		repo,
+		release_id: releaseId,
+	});
 }

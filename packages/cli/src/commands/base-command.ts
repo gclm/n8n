@@ -79,7 +79,7 @@ export abstract class BaseCommand<F = never> {
 	/** Whether to init community packages (if enabled) */
 	protected needsCommunityPackages = false;
 
-	/** Whether to init task runner (if enabled). */
+	/** Whether to init task runner. */
 	protected needsTaskRunner = false;
 
 	async init(): Promise<void> {
@@ -167,7 +167,7 @@ export abstract class BaseCommand<F = never> {
 
 		const taskRunnersConfig = this.globalConfig.taskRunners;
 
-		if (this.needsTaskRunner && taskRunnersConfig.enabled) {
+		if (this.needsTaskRunner) {
 			if (taskRunnersConfig.insecureMode) {
 				this.logger.warn(
 					'TASK RUNNER CONFIGURED TO START IN INSECURE MODE. This is discouraged for production use. Please consider using secure mode instead.',
