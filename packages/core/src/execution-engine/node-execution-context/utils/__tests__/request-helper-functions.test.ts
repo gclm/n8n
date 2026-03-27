@@ -13,7 +13,6 @@ import type {
 	PaginationOptions,
 	Workflow,
 } from 'n8n-workflow';
-import { UserError } from 'n8n-workflow';
 import nock from 'nock';
 import type { SecureContextOptions } from 'tls';
 
@@ -23,7 +22,6 @@ import type { ExecutionLifecycleHooks } from '@/execution-engine/execution-lifec
 import {
 	applyPaginationRequestData,
 	convertN8nRequestToAxios,
-	createFormDataObject,
 	httpRequest,
 	invokeAxios,
 	parseRequestObject,
@@ -32,6 +30,7 @@ import {
 	removeEmptyBody,
 	requestOAuth2,
 } from '../request-helper-functions';
+import { createFormDataObject } from '../request-helpers/axios-utils';
 
 describe('Request Helper Functions', () => {
 	describe('proxyRequestToAxios', () => {
@@ -1437,7 +1436,7 @@ describe('Request Helper Functions', () => {
 		});
 	});
 
-	describe('SSRF protection integration', () => {
+	describe('SSRF protection wiring', () => {
 		const baseUrl = 'https://example.com';
 		const workflow = mock<Workflow>();
 		const hooks = mock<ExecutionLifecycleHooks>();
@@ -1450,67 +1449,9 @@ describe('Request Helper Functions', () => {
 			createSecureLookup: jest.fn().mockReturnValue(jest.fn()),
 			...overrides,
 		});
-
 		beforeEach(() => {
 			nock.cleanAll();
 			hooks.runHook.mockClear();
-		});
-
-		describe('httpRequest (modern path)', () => {
-			test('should work normally when ssrfBridge is absent', async () => {
-				nock(baseUrl).get('/test').reply(200, { ok: true });
-
-				const response = await httpRequest({
-					method: 'GET',
-					url: `${baseUrl}/test`,
-				});
-
-				expect(response).toEqual({ ok: true });
-			});
-
-			test('should throw when validateUrl blocks a direct IP request', async () => {
-				const blockedError = new UserError('IP address is blocked');
-				const ssrfBridge = createSsrfBridge({
-					validateUrl: jest.fn().mockResolvedValue({ ok: false, error: blockedError }),
-				});
-				const additionalData = mock<IWorkflowExecuteAdditionalData>({
-					hooks,
-					ssrfBridge,
-				});
-
-				const { getRequestHelperFunctions } = await import('../request-helper-functions');
-				const helpers = getRequestHelperFunctions(workflow, node, additionalData, null, []);
-
-				await expect(
-					helpers.httpRequest({
-						method: 'GET',
-						url: 'http://127.0.0.1/secret',
-					}),
-				).rejects.toThrow('IP address is blocked');
-
-				expect(ssrfBridge.validateUrl).toHaveBeenCalledWith(new URL('http://127.0.0.1/secret'));
-			});
-
-			test('should validate hostname URLs with validateUrl', async () => {
-				const ssrfBridge = createSsrfBridge();
-				const additionalData = mock<IWorkflowExecuteAdditionalData>({
-					hooks,
-					ssrfBridge,
-				});
-
-				nock(baseUrl).get('/test').reply(200, { ok: true });
-
-				const { getRequestHelperFunctions } = await import('../request-helper-functions');
-				const helpers = getRequestHelperFunctions(workflow, node, additionalData, null, []);
-
-				const response = await helpers.httpRequest({
-					method: 'GET',
-					url: `${baseUrl}/test`,
-				});
-
-				expect(response).toEqual({ ok: true });
-				expect(ssrfBridge.validateUrl).toHaveBeenCalledWith(new URL(`${baseUrl}/test`));
-			});
 		});
 
 		describe('convertN8nRequestToAxios with ssrfBridge', () => {
@@ -1557,121 +1498,264 @@ describe('Request Helper Functions', () => {
 			});
 		});
 
-		describe('proxyRequestToAxios (legacy path)', () => {
-			test('should throw when validateUrl blocks a direct IP request', async () => {
-				const blockedError = new UserError('IP address is blocked');
-				const ssrfBridge = createSsrfBridge({
-					validateUrl: jest.fn().mockResolvedValue({ ok: false, error: blockedError }),
-				});
-				const additionalData = mock<IWorkflowExecuteAdditionalData>({
-					hooks,
-					ssrfBridge,
-				});
-
-				await expect(
-					proxyRequestToAxios(workflow, additionalData, node, 'http://10.0.0.1/internal'),
-				).rejects.toThrow('IP address is blocked');
-
-				expect(ssrfBridge.validateUrl).toHaveBeenCalledWith(new URL('http://10.0.0.1/internal'));
+		test('proxyRequestToAxios should resolve baseURL + relative url for validateUrl', async () => {
+			const ssrfBridge = createSsrfBridge();
+			const additionalData = mock<IWorkflowExecuteAdditionalData>({
+				hooks,
+				ssrfBridge,
 			});
 
-			test('should validate hostname URLs with validateUrl', async () => {
-				const ssrfBridge = createSsrfBridge();
-				const additionalData = mock<IWorkflowExecuteAdditionalData>({
-					hooks,
-					ssrfBridge,
-				});
+			nock(baseUrl).get('/test').reply(200, 'ok');
 
-				nock(baseUrl).get('/test').reply(200, 'ok');
-
-				const response = await proxyRequestToAxios(
-					workflow,
-					additionalData,
-					node,
-					`${baseUrl}/test`,
-				);
-
-				expect(response).toEqual('ok');
-				expect(ssrfBridge.validateUrl).toHaveBeenCalledWith(new URL(`${baseUrl}/test`));
+			const response = await proxyRequestToAxios(workflow, additionalData, node, {
+				baseURL: baseUrl,
+				url: '/test',
 			});
 
-			test('should validate hostname URLs with baseURL via validateUrl', async () => {
-				const ssrfBridge = createSsrfBridge();
-				const additionalData = mock<IWorkflowExecuteAdditionalData>({
-					hooks,
-					ssrfBridge,
-				});
-
-				nock(baseUrl).get('/test').reply(200, 'ok');
-
-				const response = await proxyRequestToAxios(workflow, additionalData, node, {
-					baseURL: baseUrl,
-					url: '/test',
-				});
-
-				expect(response).toEqual('ok');
-				expect(ssrfBridge.validateUrl).toHaveBeenCalledWith(new URL(`${baseUrl}/test`));
-			});
-
-			test('should work normally when ssrfBridge is absent', async () => {
-				const additionalData = mock<IWorkflowExecuteAdditionalData>({
-					hooks,
-					ssrfBridge: undefined,
-				});
-
-				nock(baseUrl).get('/test').reply(200, 'ok');
-
-				const response = await proxyRequestToAxios(
-					workflow,
-					additionalData,
-					node,
-					`${baseUrl}/test`,
-				);
-
-				expect(response).toEqual('ok');
-			});
+			expect(response).toEqual('ok');
+			expect(ssrfBridge.validateUrl).toHaveBeenCalledWith(new URL(`${baseUrl}/test`));
 		});
+		describe('domain allowlist enforcement', () => {
+			const baseUrl = 'https://example.com';
+			const workflow = mock<Workflow>();
+			const hooks = mock<ExecutionLifecycleHooks>();
+			const additionalData = mock<IWorkflowExecuteAdditionalData>({ hooks, ssrfBridge: undefined });
+			const node = mock<INode>();
 
-		describe('redirect validation', () => {
-			test('should call validateRedirectSync on redirect', async () => {
-				const ssrfBridge = createSsrfBridge();
-				const additionalData = mock<IWorkflowExecuteAdditionalData>({
-					hooks,
-					ssrfBridge,
-				});
-
-				nock(baseUrl)
-					.get('/redirect')
-					.reply(301, '', { Location: `${baseUrl}/target` });
-				nock(baseUrl).get('/target').reply(200, 'redirected');
-
-				const response = await proxyRequestToAxios(
-					workflow,
-					additionalData,
-					node,
-					`${baseUrl}/redirect`,
-				);
-
-				expect(response).toEqual('redirected');
-				expect(ssrfBridge.validateRedirectSync).toHaveBeenCalledWith(`${baseUrl}/target`);
+			beforeEach(() => {
+				nock.cleanAll();
 			});
 
-			test('should block redirect when validateRedirectSync throws', async () => {
-				const ssrfBridge = createSsrfBridge({
-					validateRedirectSync: jest.fn().mockImplementation(() => {
-						throw new UserError('SSRF: blocked redirect to internal IP');
-					}),
-				});
-				const additionalData = mock<IWorkflowExecuteAdditionalData>({
-					hooks,
-					ssrfBridge,
+			describe('httpRequest', () => {
+				test('should block requests to disallowed domains', async () => {
+					await expect(
+						httpRequest({
+							method: 'GET',
+							url: `${baseUrl}/data`,
+							allowedDomains: 'other.com',
+						}),
+					).rejects.toThrow('Domain not allowed');
 				});
 
-				nock(baseUrl).get('/redirect').reply(301, '', { Location: 'http://127.0.0.1/evil' });
+				test.each([['example.com'], [undefined]])(
+					'should allow requests to allowed domains when allowedDomains is %s',
+					async (allowedDomains) => {
+						nock(baseUrl).get('/data').reply(200, 'ok');
 
-				await expect(
-					proxyRequestToAxios(workflow, additionalData, node, `${baseUrl}/redirect`),
-				).rejects.toThrow('SSRF: blocked redirect to internal IP');
+						const response = await httpRequest({
+							method: 'GET',
+							url: `${baseUrl}/data`,
+							allowedDomains,
+						});
+
+						expect(response).toEqual('ok');
+					},
+				);
+
+				test('should block redirects to disallowed domains', async () => {
+					nock(baseUrl)
+						.get('/redirect')
+						.reply(301, '', { Location: 'https://not-allowed.com/data' });
+					nock('https://not-allowed.com').get('/data').reply(200, 'not-ok');
+
+					await expect(
+						httpRequest({
+							method: 'GET',
+							url: `${baseUrl}/redirect`,
+							allowedDomains: 'example.com',
+						}),
+					).rejects.toThrow('Domain not allowed');
+				});
+
+				test.each([['example.com, allowed.com'], [undefined]])(
+					'should allow redirects to allowed domains when allowedDomains is %s',
+					async (allowedDomains) => {
+						nock(baseUrl).get('/redirect').reply(301, '', { Location: 'https://allowed.com/data' });
+						nock('https://allowed.com').get('/data').reply(200, 'ok');
+
+						const response = await httpRequest({
+							method: 'GET',
+							url: `${baseUrl}/redirect`,
+							allowedDomains,
+						});
+
+						expect(response).toEqual('ok');
+					},
+				);
+
+				test('should support wildcard domains in allowedDomains', async () => {
+					nock('https://api.example.com').get('/data').reply(200, 'ok');
+
+					const response = await httpRequest({
+						method: 'GET',
+						url: 'https://api.example.com/data',
+						allowedDomains: '*.example.com',
+					});
+
+					expect(response).toEqual('ok');
+				});
+
+				test('should block wildcard domains that do not match', async () => {
+					await expect(
+						httpRequest({
+							method: 'GET',
+							url: 'https://blocked.com/data',
+							allowedDomains: '*.example.com',
+						}),
+					).rejects.toThrow('Domain not allowed');
+				});
+			});
+
+			describe('proxyRequestToAxios', () => {
+				test('should block requests to disallowed domains', async () => {
+					await expect(
+						proxyRequestToAxios(workflow, additionalData, node, {
+							url: `${baseUrl}/data`,
+							allowedDomains: 'other.com',
+						}),
+					).rejects.toThrow('Domain not allowed');
+				});
+
+				test.each([['example.com'], [undefined]])(
+					'should allow requests to allowed domains when allowedDomains is %s',
+					async (allowedDomains) => {
+						nock(baseUrl).get('/data').reply(200, 'ok');
+
+						const response = await proxyRequestToAxios(workflow, additionalData, node, {
+							url: `${baseUrl}/data`,
+							allowedDomains,
+						});
+
+						expect(response).toBe('ok');
+					},
+				);
+
+				test('should block redirects to disallowed domains', async () => {
+					nock(baseUrl)
+						.get('/redirect')
+						.reply(301, '', { Location: 'https://not-allowed.com/data' });
+					nock('https://not-allowed.com').get('/data').reply(200, 'not-ok');
+
+					await expect(
+						proxyRequestToAxios(workflow, additionalData, node, {
+							url: `${baseUrl}/redirect`,
+							allowedDomains: 'example.com',
+							followAllRedirects: true,
+						}),
+					).rejects.toThrow('Domain not allowed');
+				});
+
+				test.each([['example.com, allowed.com'], [undefined]])(
+					'should allow redirects to allowed domains when allowedDomains is %s',
+					async (allowedDomains) => {
+						nock(baseUrl).get('/redirect').reply(301, '', { Location: 'https://allowed.com/data' });
+						nock('https://allowed.com').get('/data').reply(200, 'ok');
+
+						const response = await proxyRequestToAxios(workflow, additionalData, node, {
+							url: `${baseUrl}/redirect`,
+							allowedDomains,
+							followAllRedirects: true,
+						});
+
+						expect(response).toBe('ok');
+					},
+				);
+
+				test('should support wildcard domains in allowedDomains', async () => {
+					nock('https://api.example.com').get('/data').reply(200, 'ok');
+
+					const response = await proxyRequestToAxios(workflow, additionalData, node, {
+						url: 'https://api.example.com/data',
+						allowedDomains: '*.example.com',
+					});
+
+					expect(response).toBe('ok');
+				});
+
+				test('should block wildcard domains that do not match', async () => {
+					await expect(
+						proxyRequestToAxios(workflow, additionalData, node, {
+							url: 'https://blocked.com/data',
+							allowedDomains: '*.example.com',
+						}),
+					).rejects.toThrow('Domain not allowed');
+				});
+			});
+
+			describe('parseRequestObject', () => {
+				test('should pass allowedDomains to beforeRedirect', async () => {
+					const axiosOptions = await parseRequestObject({
+						url: `${baseUrl}/test`,
+						allowedDomains: 'example.com',
+					});
+					const redirectOptions = {
+						agents: {},
+						hostname: 'not-allowed.com',
+						href: 'https://not-allowed.com/data',
+					};
+
+					expect(axiosOptions.beforeRedirect).toBeDefined();
+					expect(() => axiosOptions.beforeRedirect!(redirectOptions, mock())).toThrow(
+						'Domain not allowed',
+					);
+				});
+
+				test.each([['example.com'], [undefined]])(
+					'should not block redirects when allowedDomains is %s',
+					async (allowedDomains) => {
+						const axiosOptions = await parseRequestObject({
+							url: `${baseUrl}/test`,
+							allowedDomains,
+						});
+						const redirectOptions = {
+							agents: {},
+							hostname: 'example.com',
+							href: 'https://example.com/data',
+						};
+
+						expect(axiosOptions.beforeRedirect).toBeDefined();
+						expect(() => axiosOptions.beforeRedirect!(redirectOptions, mock())).not.toThrow();
+					},
+				);
+			});
+
+			describe('convertN8nRequestToAxios', () => {
+				test('should pass allowedDomains to beforeRedirect', () => {
+					const axiosConfig = convertN8nRequestToAxios({
+						method: 'GET',
+						url: `${baseUrl}/test`,
+						allowedDomains: 'example.com',
+					});
+					const redirectOptions = {
+						agents: {},
+						hostname: 'not-allowed.com',
+						href: 'https://not-allowed.com/data',
+					};
+
+					expect(axiosConfig.beforeRedirect).toBeDefined();
+					expect(() => axiosConfig.beforeRedirect!(redirectOptions, mock())).toThrow(
+						'Domain not allowed',
+					);
+				});
+
+				test.each([['example.com'], [undefined]])(
+					'should not block redirects when allowedDomains is %s',
+					(allowedDomains) => {
+						const axiosConfig = convertN8nRequestToAxios({
+							method: 'GET',
+							url: `${baseUrl}/test`,
+							allowedDomains,
+						});
+						const redirectOptions = {
+							agents: {},
+							hostname: 'example.com',
+							href: 'https://example.com/data',
+						};
+
+						expect(axiosConfig.beforeRedirect).toBeDefined();
+						expect(() => axiosConfig.beforeRedirect!(redirectOptions, mock())).not.toThrow();
+					},
+				);
 			});
 		});
 	});

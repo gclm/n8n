@@ -1,4 +1,8 @@
 {
+  "name": "workflow-scripts",
+  "scripts": {
+    "test": "node --test --experimental-test-module-mocks ./*.test.mjs"
+  },
   "dependencies": {
     "@actions/github": "9.0.0",
     "@octokit/core": "7.0.6",
