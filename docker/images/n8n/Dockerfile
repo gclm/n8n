@@ -5,7 +5,7 @@ ARG N8N_VERSION=snapshot
 # package manager or build tools, so we compile in a throwaway builder stage.
 FROM node:${NODE_VERSION}-alpine AS builder
 COPY ./compiled /usr/local/lib/node_modules/n8n
-RUN apk add --no-cache python3 make g++ && \
+RUN apk add --no-cache python3 make g++ libaio wget unzip libnsl  && \
     cd /usr/local/lib/node_modules/n8n && \
     npm rebuild sqlite3 isolated-vm
 
