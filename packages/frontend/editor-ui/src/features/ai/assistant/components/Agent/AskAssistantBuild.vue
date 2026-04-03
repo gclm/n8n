@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { useBuilderStore } from '../../builder.store';
+import { useBuilderStore, type WorkflowBuilderJourneyEventType } from '../../builder.store';
 import { useUsersStore } from '@/features/settings/users/users.store';
 import { useWorkflowHistoryStore } from '@/features/workflows/workflowHistory/workflowHistory.store';
 import { useHistoryStore } from '@/app/stores/history.store';
@@ -104,17 +104,7 @@ const chatInputRef = ref<InstanceType<typeof ChatInputWithMention>>();
 const suggestionsInputRef = ref<InstanceType<typeof ChatInputWithMention>>();
 const inputText = ref('');
 
-const notificationsPermissionsBannerTriggered = ref(false);
 const creditBannerDismissed = ref(false);
-
-watch(
-	() => builderStore.streaming,
-	(isStreaming) => {
-		if (isStreaming && canPrompt.value) {
-			notificationsPermissionsBannerTriggered.value = true;
-		}
-	},
-);
 
 watch(
 	() => builderStore.creditsRemaining,
@@ -133,7 +123,7 @@ const showUsabilityNotice = computed(
 );
 
 const shouldShowNotificationBanner = computed(() => {
-	return notificationsPermissionsBannerTriggered.value && canPrompt.value;
+	return builderStore.streaming && canPrompt.value;
 });
 
 watch(shouldShowNotificationBanner, (isShown) => {
@@ -183,7 +173,7 @@ const showExecuteMessage = computed(() => {
 	return (
 		!builderStore.streaming &&
 		(workflowDocumentStore.value?.allNodes ?? []).length > 0 &&
-		builderUpdatedWorkflowMessageIndex > -1 &&
+		builderStore.hasMessages &&
 		!hasErrorAfterUpdate &&
 		!hasTaskAbortedAfterUpdate &&
 		!hasPendingInteraction
@@ -267,6 +257,17 @@ function isQuestionsAnswered(questionsMessage: { id?: string }): boolean {
 }
 
 /**
+ * The last unanswered questions message (if any) — to render in the input slot.
+ */
+const activeQuestionsMessage = computed(() => {
+	const messages = builderStore.chatMessages;
+	const lastQuestions = messages.findLast((m) => isPlanModeQuestionsMessage(m));
+	if (!lastQuestions || !isPlanModeQuestionsMessage(lastQuestions)) return undefined;
+	if (isQuestionsAnswered(lastQuestions)) return undefined;
+	return lastQuestions;
+});
+
+/**
  * Check if this plan message is the last one and nothing has been sent after it.
  * Only the latest plan with no subsequent messages should show the "Implement" button,
  * because the HITL interrupt only works for the pending plan.
@@ -334,7 +335,6 @@ function onNewWorkflow() {
 	builderStore.resetBuilderChat();
 	processedWorkflowUpdates.value.clear();
 	accumulatedNodeIdsToTidyUp.value = [];
-	notificationsPermissionsBannerTriggered.value = false;
 }
 
 function onFeedback(feedback: RatingFeedback) {
@@ -356,6 +356,17 @@ function onFeedback(feedback: RatingFeedback) {
 }
 
 async function onWorkflowExecuted() {
+	// The wizard executes individual nodes, not the full workflow,
+	// so there's no full execution data to inspect — just send success.
+	if (builderStore.wizardHasExecutedWorkflow) {
+		await builderStore.sendChatMessage({
+			text: i18n.baseText('aiAssistant.builder.executeMessage.wizardSetupSuccess'),
+			type: 'execution',
+			executionStatus: 'success',
+		});
+		return;
+	}
+
 	const executionData = workflowsStore.workflowExecutionData;
 	const executionStatus = executionData?.status ?? 'unknown';
 	const errorNodeName = executionData?.data?.resultData.lastNodeExecuted;
@@ -641,7 +652,9 @@ defineExpose({
 					@dismiss="creditBannerDismissed = true"
 				/>
 				<Transition v-else name="slide">
-					<NotificationPermissionBanner v-if="shouldShowNotificationBanner" />
+					<NotificationPermissionBanner
+						v-if="shouldShowNotificationBanner && !activeQuestionsMessage"
+					/>
 				</Transition>
 			</template>
 			<template #messagesFooter>
@@ -651,14 +664,13 @@ defineExpose({
 				<BuildModeEmptyState />
 			</template>
 			<template #custom-message="{ message }">
-				<!-- Always render questions message; when answered, collapse to intro text only -->
+				<!-- Questions intro text only — interactive Q&A is rendered in the input slot -->
 				<PlanQuestionsMessage
 					v-if="isPlanModeQuestionsMessage(message)"
 					:questions="message.data.questions"
 					:intro-message="message.data.introMessage"
-					:disabled="builderStore.streaming"
-					:answered="isQuestionsAnswered(message)"
-					@submit="builderStore.resumeWithQuestionsAnswers"
+					:disabled="true"
+					:answered="true"
 				/>
 				<PlanDisplayMessage
 					v-else-if="isPlanModePlanMessage(message)"
@@ -720,7 +732,22 @@ defineExpose({
 				</ChatInputWithMention>
 			</template>
 			<template #inputPlaceholder>
+				<PlanQuestionsMessage
+					v-if="activeQuestionsMessage"
+					:questions="activeQuestionsMessage.data.questions"
+					:disabled="builderStore.streaming"
+					:answered="false"
+					@submit="builderStore.resumeWithQuestionsAnswers"
+					@telemetry="
+						(event, properties) =>
+							builderStore.trackWorkflowBuilderJourney(
+								event as WorkflowBuilderJourneyEventType,
+								properties,
+							)
+					"
+				/>
 				<ChatInputWithMention
+					v-else
 					ref="chatInputRef"
 					v-model="inputText"
 					:placeholder="i18n.baseText('aiAssistant.builder.assistantPlaceholder')"
