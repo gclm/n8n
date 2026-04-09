@@ -1,8 +1,7 @@
 name: 'Util: Cleanup abandoned release branches'
 
 on:
-  pull_request:
-    types: [closed]
+  workflow_dispatch:
 
 jobs:
   delete-release-branch:

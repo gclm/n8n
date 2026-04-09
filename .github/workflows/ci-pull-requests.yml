@@ -1,11 +1,10 @@
 name: 'CI: Pull Requests (Build, Test, Lint)'
 
 on:
-  pull_request:
-  merge_group:
+  workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_sha || github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -31,8 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          # Use merge_group SHA when in merge queue, otherwise PR merge ref
-          ref: ${{ github.event_name == 'merge_group' && github.event.merge_group.head_sha || format('refs/pull/{0}/merge', github.event.pull_request.number) }}
+          ref: ${{ github.ref }}
 
       - name: Capture commit SHA for cache consistency
         id: commit-sha
@@ -188,7 +186,7 @@ jobs:
   chromatic:
     name: Chromatic
     needs: install-and-build
-    if: needs.install-and-build.outputs.design_system == 'true' && github.event_name == 'pull_request' && github.repository == 'n8n-io/n8n'
+    if: needs.install-and-build.outputs.design_system == 'true' && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') && github.repository == 'n8n-io/n8n'
     uses: ./.github/workflows/test-visual-chromatic.yml
     with:
       ref: ${{ needs.install-and-build.outputs.commit_sha }}

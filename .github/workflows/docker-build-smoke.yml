@@ -9,22 +9,13 @@ name: 'Docker Build Smoke Test'
 #             build n8n + runners images (no Docker cache)
 
 on:
-  schedule:
-    - cron: '0 3 * * *' # 3:00 AM UTC, after the nightly Docker build at midnight
-  pull_request:
-    paths:
-      - 'docker/images/n8n/**'
-      - 'docker/images/n8n-base/**'
-      - 'docker/images/runners/**'
-      - 'scripts/build-n8n.mjs'
-      - 'scripts/dockerize-n8n.mjs'
   workflow_dispatch:
 
 jobs:
   docker-smoke-test:
     name: 'Docker Build (no cache)'
     runs-on: blacksmith-4vcpu-ubuntu-2204
-    if: ${{ !github.event.pull_request.head.repo.fork }}
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -53,7 +44,7 @@ jobs:
     name: Notify on nightly smoke test failure
     runs-on: ubuntu-slim
     needs: [docker-smoke-test]
-    if: needs.docker-smoke-test.result == 'failure' && github.event_name == 'schedule'
+    if: needs.docker-smoke-test.result == 'failure' && github.event_name == 'workflow_dispatch'
     steps:
       - uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
         with:

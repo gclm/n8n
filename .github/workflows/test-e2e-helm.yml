@@ -1,11 +1,6 @@
 name: 'Test: E2E Helm Chart'
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/test-e2e-helm.yml'
-      - 'packages/testing/containers/helm-stack.ts'
-      - 'packages/testing/containers/helm-start-stack.ts'
   workflow_dispatch:
     inputs:
       branch:

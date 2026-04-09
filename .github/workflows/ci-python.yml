@@ -1,13 +1,7 @@
 name: 'CI: Python'
 
 on:
-  pull_request:
-    paths:
-      - packages/@n8n/task-runner-python/**
-      - .github/workflows/ci-python.yml
-  push:
-    paths:
-      - packages/@n8n/task-runner-python/**
+  workflow_dispatch:
 
 jobs:
   checks:

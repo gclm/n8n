@@ -1,9 +1,7 @@
 name: 'CI: Check merge source and destination'
 
 on:
-  pull_request:
-    branches:
-      - master
+  workflow_dispatch:
 
 permissions:
   pull-requests: write

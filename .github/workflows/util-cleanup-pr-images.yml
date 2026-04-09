@@ -1,9 +1,7 @@
 name: 'Util: Cleanup CI Docker Images'
 
 on:
-  schedule:
-    # Daily cleanup at 3 AM UTC
-    - cron: '0 3 * * *'
+  workflow_dispatch:
 
 jobs:
   cleanup:

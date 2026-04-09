@@ -1,11 +1,7 @@
 name: 'CI: Detect New Packages on Master'
 
 on:
-  pull_request:
-    types:
-      - closed
-    branches:
-      - master
+  workflow_dispatch:
 
 jobs:
   detect-new-packages:

@@ -1,13 +1,7 @@
 name: 'Test: Evals Python'
 
 on:
-  pull_request:
-    paths:
-      - packages/@n8n/ai-workflow-builder.ee/evaluations/programmatic/python/**
-      - .github/workflows/test-evals-python.yml
-  push:
-    paths:
-      - packages/@n8n/ai-workflow-builder.ee/evaluations/programmatic/python/**
+  workflow_dispatch:
 
 jobs:
   workflow-comparison:

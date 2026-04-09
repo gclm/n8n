@@ -1,9 +1,7 @@
 name: 'Security: Publish fix'
 
 on:
-  pull_request:
-    types: [closed]
-    branches: [master]
+  workflow_dispatch:
 
 jobs:
   sync-security-fix:

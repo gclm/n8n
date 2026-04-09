@@ -1,16 +1,6 @@
 name: 'Build: Base Image'
 
 on:
-  push:
-    branches:
-      - master
-    paths:
-      - 'docker/images/n8n-base/Dockerfile'
-      - '.github/workflows/build-base-image.yml'
-  pull_request:
-    paths:
-      - 'docker/images/n8n-base/Dockerfile'
-      - '.github/workflows/build-base-image.yml'
   workflow_dispatch:
     inputs:
       push:
@@ -60,9 +50,9 @@ jobs:
           build-args: |
             NODE_VERSION=${{ matrix.node_version }}
           platforms: linux/amd64,linux/arm64
-          provenance: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.push == true) }}
-          sbom: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.push == true) }}
-          push: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.push == true) }}
+          provenance: ${{ github.event_name == 'workflow_dispatch' && inputs.push == true }}
+          sbom: ${{ github.event_name == 'workflow_dispatch' && inputs.push == true }}
+          push: ${{ github.event_name == 'workflow_dispatch' && inputs.push == true }}
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/base:${{ matrix.node_version }}-${{ github.sha }}
             ${{ secrets.DOCKER_USERNAME }}/base:${{ matrix.node_version }}

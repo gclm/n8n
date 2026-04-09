@@ -1,15 +1,7 @@
 name: 'CI: Block fork PRs to release branches'
 
 on:
-  pull_request:
-    branches:
-      - 'release/**'
-    types:
-      - opened
-      - reopened
-      - synchronize
-      - ready_for_review
-      - edited
+  workflow_dispatch:
 
 jobs:
   block-fork-prs:

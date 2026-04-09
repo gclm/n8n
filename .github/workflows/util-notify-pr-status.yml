@@ -1,10 +1,7 @@
 name: 'Util: Notify PR Status'
 
 on:
-  pull_request_review:
-    types: [submitted, dismissed]
-  pull_request:
-    types: [closed]
+  workflow_dispatch:
 
 jobs:
   notify:

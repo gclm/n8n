@@ -18,13 +18,6 @@ on:
     secrets:
       QBOT_SLACK_TOKEN:
         required: false
-  pull_request:
-    branches: [master]
-    paths:
-      - '**/package.json'
-      - '**/turbo.json'
-      - '.github/workflows/build-windows.yml'
-      - '.github/actions/setup-nodejs/**'
 
 jobs:
   build:

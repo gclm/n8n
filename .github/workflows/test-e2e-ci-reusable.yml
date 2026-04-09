@@ -20,7 +20,7 @@ env:
 jobs:
   prepare:
     name: 'Prepare E2E'
-    if: ${{ !github.event.pull_request.head.repo.fork }}
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork }}
     runs-on: blacksmith-4vcpu-ubuntu-2204
     permissions:
       packages: write
@@ -60,7 +60,7 @@ jobs:
         if: ${{ inputs.playwright-only }}
         id: changed-files
         run: |
-          git fetch --depth=1 origin ${{ github.event.pull_request.base.ref || 'master' }}
+          git fetch --depth=1 origin ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || 'master' }}
           echo "list=$(git diff --name-only FETCH_HEAD HEAD | tr '\n' ',' | sed 's/,$//')" >> "$GITHUB_OUTPUT"
 
       - name: Generate shard matrix
@@ -79,7 +79,7 @@ jobs:
   sqlite-sanity:
     needs: [prepare]
     name: 'SQLite: Sanity Check'
-    if: ${{ !github.event.pull_request.head.repo.fork }}
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork }}
     uses: ./.github/workflows/test-e2e-reusable.yml
     with:
       branch: ${{ inputs.branch }}
@@ -97,7 +97,7 @@ jobs:
   multi-main-e2e:
     needs: [prepare]
     name: 'Multi-Main: E2E'
-    if: ${{ !github.event.pull_request.head.repo.fork && needs.prepare.outputs.skip-tests != 'true' }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) && needs.prepare.outputs.skip-tests != 'true' }}
     uses: ./.github/workflows/test-e2e-reusable.yml
     with:
       branch: ${{ inputs.branch }}
@@ -115,7 +115,7 @@ jobs:
   # Runs on GitHub-hosted runners without Currents reporting
   community-e2e:
     name: 'Community: E2E'
-    if: ${{ github.event.pull_request.head.repo.fork }}
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork }}
     uses: ./.github/workflows/test-e2e-reusable.yml
     with:
       branch: ${{ inputs.branch }}
@@ -131,7 +131,7 @@ jobs:
   cleanup-ghcr:
     name: 'Cleanup GHCR Image'
     needs: [prepare, multi-main-e2e, sqlite-sanity]
-    if: ${{ !failure() && !cancelled() && !github.event.pull_request.head.repo.fork }}
+    if: ${{ !failure() && !cancelled() && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) }}
     runs-on: blacksmith-2vcpu-ubuntu-2204
     permissions:
       packages: write
