@@ -3,11 +3,28 @@ name: 'Docker: Build and Push (CHS tags only)'
 env:
   NODE_OPTIONS: '--max-old-space-size=8192'
   NODE_VERSION: '24.13.1'
+  # 推 tag 时用 tag 名；手动 workflow_dispatch 时用输入的 release_tag
+  CHS_RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
 
 on:
   push:
     tags:
       - '*chs*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Docker / GitHub Release 标签（须含 chs，例如 1.114.0-chs.1）'
+        required: true
+        type: string
+      source_ref:
+        description: '检出源码的 Git ref（分支 / tag / SHA）。留空=本次运行所选分支的 HEAD'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   build-and-push-docker:
@@ -28,10 +45,23 @@ jobs:
     outputs:
       image_ref: ${{ steps.determine-tags.outputs.n8n_primary_tag }}
     steps:
+      - name: Validate manual inputs
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          case "${RELEASE_TAG}" in *chs*|*CHS*) ;; *)
+            echo "::error title=Invalid release_tag::release_tag 必须包含 chs（与 push tag 触发规则一致）"
+            exit 1
+            ;;
+          esac
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && (inputs.source_ref != '' && inputs.source_ref || github.sha) || github.ref }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -59,8 +89,9 @@ jobs:
 
       - name: Set build context
         id: context
+        env:
+          REF_NAME: ${{ env.CHS_RELEASE_TAG }}
         run: |
-          REF_NAME="${GITHUB_REF##*/}"
           {
             echo "release_type=custom"
             echo "n8n_version=${REF_NAME}"
@@ -69,8 +100,9 @@ jobs:
 
       - name: Determine Docker tags
         id: determine-tags
+        env:
+          REF_NAME: ${{ env.CHS_RELEASE_TAG }}
         run: |
-          REF_NAME="${GITHUB_REF##*/}"
           OWNER_LC="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
           GHCR_N8N="ghcr.io/${OWNER_LC}/n8n"
           GHCR_RUNNERS="ghcr.io/${OWNER_LC}/runners"
@@ -181,8 +213,9 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Create GHCR multi-arch manifests
+        env:
+          REF_NAME: ${{ env.CHS_RELEASE_TAG }}
         run: |
-          REF_NAME="${GITHUB_REF##*/}"
           OWNER_LC="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
           GHCR_N8N="ghcr.io/${OWNER_LC}/n8n"
           GHCR_RUNNERS="ghcr.io/${OWNER_LC}/runners"
@@ -215,8 +248,9 @@ jobs:
             "${GHCR_RUNNERS}:latest-distroless-arm64"
 
       - name: Create DockerHub multi-arch manifests
+        env:
+          REF_NAME: ${{ env.CHS_RELEASE_TAG }}
         run: |
-          REF_NAME="${GITHUB_REF##*/}"
           DH_N8N="${{ secrets.DOCKER_USERNAME }}/n8n"
           DH_RUNNERS="${{ secrets.DOCKER_USERNAME }}/runners"
 
@@ -246,3 +280,49 @@ jobs:
             --tag "${DH_RUNNERS}:latest-distroless" \
             "${DH_RUNNERS}:latest-distroless-amd64" \
             "${DH_RUNNERS}:latest-distroless-arm64"
+
+  publish_github_release:
+    name: Publish GitHub Release
+    needs: create_multi_arch_manifest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create or skip GitHub Release for tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ env.CHS_RELEASE_TAG }}
+          REPO: ${{ github.repository }}
+          OWNER_LC: ${{ github.repository_owner }}
+          DOCKER_USER: ${{ secrets.DOCKER_USERNAME }}
+        run: |
+          set -euo pipefail
+          OWNER_LOWER="$(printf '%s' "${OWNER_LC}" | tr '[:upper:]' '[:lower:]')"
+          NOTES_FILE="$(mktemp)"
+          trap 'rm -f "${NOTES_FILE}"' EXIT
+          {
+            echo 'CHS Docker images for this tag (multi-arch manifest lists):'
+            echo
+            echo '### GHCR'
+            echo "- \`ghcr.io/${OWNER_LOWER}/n8n:${TAG}\`"
+            echo "- \`ghcr.io/${OWNER_LOWER}/runners:${TAG}\`"
+            echo "- \`ghcr.io/${OWNER_LOWER}/runners:${TAG}-distroless\`"
+            echo
+            echo '### Docker Hub'
+            echo "- \`${DOCKER_USER}/n8n:${TAG}\`"
+            echo "- \`${DOCKER_USER}/runners:${TAG}\`"
+            echo "- \`${DOCKER_USER}/runners:${TAG}-distroless\`"
+          } > "${NOTES_FILE}"
+
+          if gh release view "${TAG}" --repo "${REPO}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists on ${REPO}, skipping create."
+            exit 0
+          fi
+
+          BODY="$(cat "${NOTES_FILE}")"
+          jq -n \
+            --arg tag "${TAG}" \
+            --arg name "${TAG}" \
+            --arg body "${BODY}" \
+            '{tag_name: $tag, name: $name, body: $body, generate_release_notes: true, draft: false, prerelease: false}' \
+            | gh api --method POST "repos/${REPO}/releases" --input -
