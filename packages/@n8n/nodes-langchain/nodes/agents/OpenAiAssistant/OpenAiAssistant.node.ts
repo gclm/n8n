@@ -359,10 +359,6 @@ export class OpenAiAssistant implements INodeType {
 					});
 				}
 
-				if (options.baseURL) {
-					checkDomainRestrictions(this, credentials, options.baseURL);
-				}
-
 				const client = new OpenAIClient({
 					apiKey: credentials.apiKey as string,
 					maxRetries: options.maxRetries ?? 2,
