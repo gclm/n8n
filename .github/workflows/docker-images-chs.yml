@@ -1,8 +1,8 @@
 name: 'Docker: Build and Push (CHS tags only)'
 
 env:
-  NODE_OPTIONS: '--max-old-space-size=8192'
-  NODE_VERSION: '24.13.1'
+  NODE_OPTIONS: '--max-old-space-size=7168'
+  NODE_VERSION: '24.15.0'
   # 推 tag 时用 tag 名；手动 workflow_dispatch 时用输入的 release_tag
   CHS_RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
 
@@ -56,34 +56,17 @@ jobs:
           esac
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
           ref: ${{ github.event_name == 'workflow_dispatch' && (inputs.source_ref != '' && inputs.source_ref || github.sha) || github.ref }}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup and Build
+        uses: ./.github/actions/setup-nodejs
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Configure Turborepo Cache
-        uses: actions/cache@v4
-        with:
-          path: .turbo
-          key: ${{ runner.os }}-turbo-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-turbo-
-
-      - name: Build n8n for Docker
-        run: pnpm build:n8n
+          build-command: pnpm build:n8n
+          enable-docker-cache: 'true'
 
       - name: Set build context
         id: context
@@ -131,21 +114,13 @@ jobs:
             echo "EOF"
           } >> "${GITHUB_OUTPUT}"
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+      - name: Login to Docker registries
+        uses: ./.github/actions/docker-registry-login
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          login-ghcr: true
+          login-dockerhub: true
+          dockerhub-username: ${{ secrets.DOCKER_USERNAME }}
+          dockerhub-password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push n8n image
         uses: docker/build-push-action@v5
@@ -195,20 +170,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+      - name: Login to Docker registries
+        uses: ./.github/actions/docker-registry-login
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          login-ghcr: true
+          login-dockerhub: true
+          dockerhub-username: ${{ secrets.DOCKER_USERNAME }}
+          dockerhub-password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Create GHCR multi-arch manifests
         env:
