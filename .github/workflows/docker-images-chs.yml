@@ -2,7 +2,10 @@ name: 'Docker: Build and Push (CHS tags only)'
 
 env:
   NODE_OPTIONS: '--max-old-space-size=8192'
-  NODE_VERSION: '24.15.0'
+  # Host build: 2.23.x lockfile/native addons are verified on 24.13.1 (24.15.0 fails pnpm install).
+  NODE_VERSION: '24.13.1'
+  # Docker runtime/base image tag (must match published n8nio/base on Docker Hub).
+  DOCKER_NODE_VERSION: '24.13.1'
   # 推 tag 时用 tag 名；手动 workflow_dispatch 时用输入的 release_tag
   CHS_RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
 
@@ -79,7 +82,16 @@ jobs:
           fi
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          set -o pipefail
+          pnpm install --frozen-lockfile --reporter=append-only 2>&1 | tee "${RUNNER_TEMP}/pnpm-install.log"
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            echo "::group::pnpm install log"
+            tail -n 200 "${RUNNER_TEMP}/pnpm-install.log" || true
+            echo "::endgroup::"
+            exit "$rc"
+          fi
 
       - name: Configure Turborepo cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -155,7 +167,7 @@ jobs:
           context: .
           file: ./docker/images/n8n/Dockerfile
           build-args: |
-            NODE_VERSION=${{ env.NODE_VERSION }}
+            NODE_VERSION=${{ env.DOCKER_NODE_VERSION }}
             N8N_VERSION=${{ steps.context.outputs.n8n_version }}
             N8N_RELEASE_TYPE=custom
           platforms: ${{ matrix.docker_platform }}
@@ -169,7 +181,7 @@ jobs:
           context: .
           file: ./docker/images/runners/Dockerfile
           build-args: |
-            NODE_VERSION=${{ env.NODE_VERSION }}
+            NODE_VERSION=${{ env.DOCKER_NODE_VERSION }}
             N8N_VERSION=${{ steps.context.outputs.n8n_version }}
             N8N_RELEASE_TYPE=custom
           platforms: ${{ matrix.docker_platform }}
@@ -183,7 +195,7 @@ jobs:
           context: .
           file: ./docker/images/runners/Dockerfile.distroless
           build-args: |
-            NODE_VERSION=${{ env.NODE_VERSION }}
+            NODE_VERSION=${{ env.DOCKER_NODE_VERSION }}
             N8N_VERSION=${{ steps.context.outputs.n8n_version }}
             N8N_RELEASE_TYPE=custom
           platforms: ${{ matrix.docker_platform }}
