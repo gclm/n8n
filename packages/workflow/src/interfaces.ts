@@ -7,6 +7,7 @@ import type FormData from 'form-data';
 import type { PathLike } from 'fs';
 import type { IncomingHttpHeaders } from 'http';
 import type { AgentOptions } from 'https';
+import type { JSONSchema7 } from 'json-schema';
 import type { ReplyHeaders, RequestBodyMatcher, RequestHeaderMatcher } from 'nock';
 import type { Client as SSHClient } from 'ssh2';
 import type { Readable } from 'stream';
@@ -2004,6 +2005,12 @@ export interface ExecuteAgentInfo {
 	 * from the workflow execution id and item index.
 	 */
 	sessionId?: string;
+	/**
+	 * Optional JSON Schema describing the shape the agent should return. When
+	 * provided, it is applied to this call only, and the conforming object is
+	 * surfaced on {@link ExecuteAgentData.structuredOutput}.
+	 */
+	outputSchema?: JSONSchema7;
 }
 
 export interface ExecuteAgentOptions {
@@ -2225,10 +2232,20 @@ export type EngineResponse<T = unknown> = {
 };
 
 /**
+ * Tag identifying `Node` subclasses. `Symbol.for` interns into the global symbol
+ * registry, so every copy of `n8n-workflow` loaded in the same process resolves the identical
+ * symbol, regardless of the dependency tree layout.
+ */
+const NODE_CLASS_TAG: unique symbol = Symbol.for('n8n.workflow.NodeClass');
+
+/**
  * This class serves as the base for all nodes using the new context API
  * having this as a class enables us to identify these instances at runtime
  */
 export abstract class Node {
+	get [NODE_CLASS_TAG](): true {
+		return true;
+	}
 	abstract description: INodeTypeDescription;
 	execute?(
 		context: IExecuteFunctions,
@@ -2236,6 +2253,15 @@ export abstract class Node {
 	): Promise<INodeExecutionData[][] | EngineRequest>;
 	webhook?(context: IWebhookFunctions): Promise<IWebhookResponseData>;
 	poll?(context: IPollFunctions): Promise<INodeExecutionData[][] | null>;
+}
+
+/**
+ * Returns `true` when `nodeType` is an instance of a `Node` subclass (a node using the new
+ * context API). Prefer this over `nodeType instanceof Node` at runtime: it survives
+ * `n8n-workflow` module duplication, which breaks `instanceof`.
+ */
+export function isNodeClassInstance(nodeType: unknown): nodeType is Node {
+	return typeof nodeType === 'object' && nodeType !== null && NODE_CLASS_TAG in nodeType;
 }
 
 export interface IVersionedNodeType {
@@ -3253,6 +3279,8 @@ export interface IWorkflowExecuteAdditionalData {
 		executionId: string,
 		threadId: string,
 		additionalData: IWorkflowExecuteAdditionalData,
+		executionMode: WorkflowExecuteMode,
+		outputSchema?: JSONSchema7,
 	) => Promise<ExecuteAgentData>;
 	listAgents?: (userId: string) => Promise<Array<{ id: string; name: string }>>;
 	getRunExecutionData: (executionId: string) => Promise<IRunExecutionData | undefined>;
@@ -3313,6 +3341,14 @@ export interface IWorkflowExecuteAdditionalData {
 	 * dynamically. Reset to false by the execution engine before each node runs.
 	 */
 	currentNodeUsedDynamicCredentials?: boolean;
+	/**
+	 * The n8n user a dynamically-resolved private credential belongs to, set during
+	 * credential resolution when the resolver maps the execution's identity to an n8n
+	 * user. Execution-scoped (one identity per execution), so it is not reset per node.
+	 * The execution engine copies it onto `runtimeData.executedByUserId` for the
+	 * redaction layer.
+	 */
+	dynamicCredentialsResolvedUserId?: string;
 	otel?: {
 		injectTraceHeaders: (
 			executionId: string,
