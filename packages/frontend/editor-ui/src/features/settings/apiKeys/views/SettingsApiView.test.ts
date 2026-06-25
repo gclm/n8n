@@ -12,7 +12,40 @@ import { DateTime } from 'luxon';
 import { useRootStore } from '@n8n/stores/useRootStore';
 import { useUsersStore } from '@/features/settings/users/users.store';
 import { useRBACStore } from '@/app/stores/rbac.store';
+import { useTelemetry } from '@/app/composables/useTelemetry';
 import type { ApiKey, ApiKeyOwner } from '@n8n/api-types';
+
+vi.mock('@/app/composables/useTelemetry', () => {
+	const track = vi.fn();
+	return {
+		useTelemetry: () => ({ track }),
+	};
+});
+
+// Reka UI's dropdown menu doesn't open in jsdom (no pointer-capture support), so the
+// row action menu can't be driven through the real component. Stub it to render its
+// items directly as buttons keyed by their testId, emitting `select` on click.
+vi.mock('@n8n/design-system', async (importOriginal) => {
+	const original = await importOriginal<object>();
+	return {
+		...original,
+		N8nActionDropdown: {
+			name: 'N8nActionDropdown',
+			props: { items: { type: Array, required: true } },
+			emits: ['select'],
+			template: `
+				<div>
+					<button
+						v-for="item in items"
+						:key="item.id"
+						:data-test-id="item.testId"
+						@click="$emit('select', item.id)"
+					>{{ item.label }}</button>
+				</div>
+			`,
+		},
+	};
+});
 
 setActivePinia(createTestingPinia());
 
@@ -152,8 +185,7 @@ describe('SettingsApiView', () => {
 
 		renderComponent(SettingsApiView);
 
-		const revokeButton = screen.getByTestId('api-key-revoke-action');
-		await fireEvent.click(revokeButton);
+		await fireEvent.click(screen.getByTestId('api-key-revoke-action'));
 
 		expect(screen.getByText(/Revoke "test-key-1" API key/)).toBeInTheDocument();
 	});
@@ -246,6 +278,112 @@ describe('SettingsApiView', () => {
 			await fireEvent.click(screen.getByText('All'));
 
 			expect(apiKeysStore.setOwnership).toHaveBeenCalledWith('all');
+		});
+
+		it('tracks "User viewed all API keys" when the admin opens the All tab', async () => {
+			settingsStore.isPublicApiEnabled = true;
+			apiKeysStore.apiKeys = [makeKey({ id: '1', label: 'admin-own', owner: ownerFixture })];
+			apiKeysStore.mineCount = 1;
+			apiKeysStore.allCount = 2;
+			apiKeysStore.totalMineCount = apiKeysStore.mineCount;
+			apiKeysStore.totalAllCount = apiKeysStore.allCount || 1;
+
+			renderComponent(SettingsApiView);
+
+			const { track } = useTelemetry();
+
+			await fireEvent.click(screen.getByText('All'));
+
+			expect(track).toHaveBeenCalledWith('User viewed all API keys');
+		});
+
+		it('does not track "User viewed all API keys" when switching back to Mine', async () => {
+			settingsStore.isPublicApiEnabled = true;
+			apiKeysStore.apiKeys = [makeKey({ id: '1', label: 'admin-own', owner: ownerFixture })];
+			apiKeysStore.mineCount = 1;
+			apiKeysStore.allCount = 2;
+			apiKeysStore.totalMineCount = apiKeysStore.mineCount;
+			apiKeysStore.totalAllCount = apiKeysStore.allCount || 1;
+
+			renderComponent(SettingsApiView);
+
+			const { track } = useTelemetry();
+
+			await fireEvent.click(screen.getByText('Mine'));
+
+			expect(track).not.toHaveBeenCalledWith('User viewed all API keys');
+		});
+	});
+
+	describe('telemetry', () => {
+		beforeEach(() => {
+			settingsStore.isPublicApiEnabled = true;
+		});
+
+		it('tracks "User clicked view API key scopes" with is_own=true for the current user’s key', async () => {
+			apiKeysStore.apiKeys = [makeKey({ id: '1', label: 'mine', owner: ownerFixture })];
+			apiKeysStore.mineCount = 1;
+			apiKeysStore.allCount = 1;
+			apiKeysStore.totalMineCount = apiKeysStore.mineCount;
+			apiKeysStore.totalAllCount = apiKeysStore.allCount || 1;
+
+			renderComponent(SettingsApiView);
+
+			const { track } = useTelemetry();
+
+			await fireEvent.click(screen.getByTestId('api-key-scopes-cell'));
+
+			expect(track).toHaveBeenCalledWith('User clicked view API key scopes', { is_own: true });
+		});
+
+		it('tracks "User clicked view API key scopes" with is_own=false for another user’s key', async () => {
+			apiKeysStore.apiKeys = [
+				makeKey({
+					id: '1',
+					label: 'theirs',
+					owner: { ...ownerFixture, id: 'someone-else' },
+				}),
+			];
+			apiKeysStore.mineCount = 1;
+			apiKeysStore.allCount = 1;
+			apiKeysStore.totalMineCount = apiKeysStore.mineCount;
+			apiKeysStore.totalAllCount = apiKeysStore.allCount || 1;
+
+			renderComponent(SettingsApiView);
+
+			const { track } = useTelemetry();
+
+			await fireEvent.click(screen.getByTestId('api-key-scopes-cell'));
+
+			expect(track).toHaveBeenCalledWith('User clicked view API key scopes', { is_own: false });
+		});
+
+		it('tracks "User clicked delete API key button" with is_own derived from the revoked key', async () => {
+			apiKeysStore.apiKeys = [
+				makeKey({
+					id: '1',
+					label: 'theirs',
+					owner: { ...ownerFixture, id: 'someone-else' },
+				}),
+			];
+			apiKeysStore.mineCount = 1;
+			apiKeysStore.allCount = 1;
+			apiKeysStore.totalMineCount = apiKeysStore.mineCount;
+			apiKeysStore.totalAllCount = apiKeysStore.allCount || 1;
+
+			renderComponent(SettingsApiView);
+
+			const { track } = useTelemetry();
+
+			await fireEvent.click(screen.getByTestId('api-key-revoke-action'));
+			// The confirm dialog renders via a portal. Take the last "Revoke" button so we
+			// click the modal's confirm action rather than the stubbed menu item.
+			const revokeButtons = await screen.findAllByRole('button', { name: 'Revoke' });
+			await fireEvent.click(revokeButtons[revokeButtons.length - 1]);
+
+			expect(track).toHaveBeenCalledWith('User clicked delete API key button', {
+				is_own: false,
+			});
 		});
 	});
 });

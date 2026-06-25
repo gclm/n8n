@@ -21,7 +21,8 @@ import {
 	type SubAgentTaskDifficulty,
 } from '@n8n/api-types';
 import { Logger } from '@n8n/backend-common';
-import { AgentsConfig } from '@n8n/config';
+import { OutboundHttp, SsrfProtectionService } from '@n8n/backend-network';
+import { AgentsConfig, SsrfProtectionConfig } from '@n8n/config';
 import { UserRepository, WorkflowRepository } from '@n8n/db';
 import { Container, Service } from '@n8n/di';
 import { UserError } from 'n8n-workflow';
@@ -30,6 +31,7 @@ import { ActiveExecutions } from '@/active-executions';
 import { EphemeralNodeExecutor } from '@/node-execution';
 import { OauthService } from '@/oauth/oauth.service';
 import { UrlService } from '@/services/url.service';
+import { createAiMcpFetch } from '@/utils/ai-proxy-fetch';
 import { WorkflowRunner } from '@/workflow-runner';
 import { WorkflowFinderService } from '@/workflows/workflow-finder.service';
 
@@ -57,8 +59,6 @@ import { resolveCredentialAwareModelConfig } from './json-config/model-config';
 import { AgentRepository } from './repositories/agent.repository';
 import { AgentSecureRuntime } from './runtime/agent-secure-runtime';
 import { buildToolRegistry, type ToolRegistry } from './tool-registry';
-import { AgentKnowledgeCommandService } from './agent-knowledge-command.service';
-import { AgentKnowledgeService } from './agent-knowledge.service';
 import { AgentsToolsService } from './agents-tools.service';
 import { createN8nDelegateSubAgentTool } from './sub-agents/delegate-sub-agent-tool';
 import { SubAgentForegroundRunner } from './sub-agents/sub-agent-foreground-runner';
@@ -106,8 +106,9 @@ export class AgentRuntimeReconstructionService {
 		private readonly n8nMemory: N8nMemory,
 		private readonly oauthService: OauthService,
 		private readonly agentsConfig: AgentsConfig,
-		private readonly agentKnowledgeService: AgentKnowledgeService,
-		private readonly agentKnowledgeCommandService: AgentKnowledgeCommandService,
+		private readonly outboundHttp: OutboundHttp,
+		private readonly ssrfConfig: SsrfProtectionConfig,
+		private readonly ssrfProtectionService: SsrfProtectionService,
 	) {}
 
 	async reconstructFromAgentEntity(
@@ -200,11 +201,19 @@ export class AgentRuntimeReconstructionService {
 		const toolResolver = this.makeToolResolver(projectId, userId);
 		const resolvedTools: BuiltTool[] = [];
 
+		// Transport for MCP calls
+		const aiMcpFetch = createAiMcpFetch(
+			this.outboundHttp,
+			this.ssrfConfig,
+			this.ssrfProtectionService,
+		);
+
 		const buildMcpClient = async (server: AgentJsonMcpServerConfig) =>
 			await buildMcpClientForServer(server, {
 				credentialProvider,
 				oauthService: this.oauthService,
 				projectId,
+				proxyFetch: aiMcpFetch,
 			});
 
 		const reconstructed = await buildFromJson(config, toolDescriptors, {
@@ -289,10 +298,6 @@ export class AgentRuntimeReconstructionService {
 		return this.agentsConfig.modules.includes('node-tools-searcher');
 	}
 
-	private isKnowledgeBaseModuleEnabled(): boolean {
-		return this.agentsConfig.modules.includes('knowledge-base');
-	}
-
 	private makeToolResolver(projectId: string, userId: string): ToolResolver {
 		return async (ref: AgentJsonToolConfig) => {
 			if (ref.type === 'workflow') {
@@ -353,25 +358,6 @@ export class AgentRuntimeReconstructionService {
 		} = params;
 
 		agent.tool(createGetEnvironmentTool());
-
-		if (this.isKnowledgeBaseModuleEnabled()) {
-			try {
-				const { createSearchKnowledgeTool } = await import('./tools/knowledge/tool');
-				agent.tool(
-					createSearchKnowledgeTool({
-						agentId,
-						projectId,
-						knowledgeService: this.agentKnowledgeService,
-						commandService: this.agentKnowledgeCommandService,
-					}),
-				);
-			} catch (toolError) {
-				this.logger.warn('Failed to inject search_knowledge tool', {
-					agentId,
-					error: toolError instanceof Error ? toolError.message : String(toolError),
-				});
-			}
-		}
 
 		if (runtimeProfile === 'top-level') {
 			const integrationRegistry = Container.get(ChatIntegrationRegistry);

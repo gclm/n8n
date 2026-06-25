@@ -67,6 +67,8 @@ export interface IExecutionBase {
 	 */
 	tracingContext?: { traceparent: string; tracestate?: string } | null;
 	deduplicationKey?: string | null; // see `ExecutionEntity.deduplicationKey`
+	jsonSizeBytes?: number; // see `ExecutionEntity.jsonSizeBytes`
+	workflowVersionId?: string | null; // see `ExecutionEntity.workflowVersionId`
 }
 
 // Required by PublicUser
@@ -166,7 +168,7 @@ export interface WorkflowWithSharingsMetaDataAndCredentials extends Omit<Workflo
 /** Payload for creating an execution. */
 export type CreateExecutionPayload = Omit<
 	IExecutionDb,
-	'id' | 'createdAt' | 'startedAt' | 'storedAt'
+	'id' | 'createdAt' | 'startedAt' | 'storedAt' | 'jsonSizeBytes' | 'workflowVersionId'
 >;
 
 // Data in regular format with references
@@ -459,7 +461,7 @@ export type AuthenticatedRequest<
 };
 
 export function isAuthenticatedRequest(req: express.Request): req is AuthenticatedRequest {
-	return 'user' in req && req.user !== null;
+	return 'user' in req && Object.hasOwn(req, 'user') && req.user !== null;
 }
 
 /**
