@@ -1,0 +1,583 @@
+# Instincts generated from https://github.com/gclm/n8n
+# Generated: 2026-05-04T20:01:58.810Z
+# Version: 2.0
+# NOTE: This file supplements (does not replace) any existing curated instincts.
+# High-confidence manually curated instincts should be preserved alongside these.
+
+---
+id: n8n-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/gclm/n8n
+---
+
+# N8n Commit Length
+
+## Action
+
+Write moderate-length commit messages (~95 characters)
+
+## Evidence
+
+- Average commit message length: 95 chars
+- Based on 16 commits
+
+---
+id: n8n-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/gclm/n8n
+---
+
+# N8n Naming Files
+
+## Action
+
+Use camelCase naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: camelCase
+
+---
+id: n8n-import-relative
+trigger: "when importing modules"
+confidence: 0.75
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/gclm/n8n
+---
+
+# N8n Import Relative
+
+## Action
+
+Use relative imports for project files
+
+## Evidence
+
+- Import analysis shows relative import pattern
+- Example: import { x } from '../lib/x'
+
+---
+id: n8n-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/gclm/n8n
+---
+
+# N8n Export Style
+
+## Action
+
+Prefer named exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: named
+
+---
+id: n8n-arch-feature-based
+trigger: "when adding a new feature"
+confidence: 0.85
+domain: architecture
+source: repo-analysis
+source_repo: https://github.com/gclm/n8n
+---
+
+# N8n Arch Feature Based
+
+## Action
+
+Create a new folder in src/features/ with all related code colocated
+
+## Evidence
+
+- Feature-based module organization detected
+- Structure: src/features/[feature-name]/
+
+---
+id: n8n-test-framework
+trigger: "when writing tests"
+confidence: 0.9
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/gclm/n8n
+---
+
+# N8n Test Framework
+
+## Action
+
+Use jest as the test framework
+
+## Evidence
+
+- Test framework detected: jest
+- File pattern: *.test.ts
+
+---
+id: n8n-test-naming
+trigger: "when creating a test file"
+confidence: 0.85
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/gclm/n8n
+---
+
+# N8n Test Naming
+
+## Action
+
+Name test files using the pattern: *.test.ts
+
+## Evidence
+
+- File pattern: *.test.ts
+- Consistent across test files
+
+---
+id: n8n-test-mocking
+trigger: "when mocking dependencies in tests"
+confidence: 0.75
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/gclm/n8n
+---
+
+# N8n Test Mocking
+
+## Action
+
+Use jest.mock for mocking
+
+## Evidence
+
+- Mocking pattern detected: jest.mock
+- Consistent across test files
+
+---
+id: n8n-test-types
+trigger: "when planning tests for a feature"
+confidence: 0.7
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/gclm/n8n
+---
+
+# N8n Test Types
+
+## Action
+
+Write unit, integration tests to match project standards
+
+## Evidence
+
+- Test types detected: unit, integration
+- Coverage config: yes
+
+---
+id: n8n-workflow-release-version-bump
+trigger: "when doing release version bump"
+confidence: 0.65
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/gclm/n8n
+---
+
+# N8n Workflow Release Version Bump
+
+## Action
+
+Follow the release-version-bump workflow:
+1. Update CHANGELOG.md with release notes.
+2. Update version in package.json at the root and in affected packages.
+3. Commit and tag the release.
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~3x per month
+- Files: CHANGELOG.md, package.json, packages/*/package.json
+
+---
+id: n8n-workflow-add-or-modify-database-table
+trigger: "when doing add or modify database table"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/gclm/n8n
+---
+
+# N8n Workflow Add Or Modify Database Table
+
+## Action
+
+Follow the add-or-modify-database-table workflow:
+1. Create or update entity file in packages/@n8n/db/src/entities/.
+2. Add or update migration in packages/@n8n/db/src/migrations/common/ and database-specific folders.
+3. Update repository in packages/@n8n/db/src/repositories/.
+4. Update index files for entities and repositories.
+5. Add or update related tests.
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: packages/@n8n/db/src/entities/*.ts, packages/@n8n/db/src/migrations/common/*.ts, packages/@n8n/db/src/migrations/postgresdb/index.ts
+
+---
+id: n8n-workflow-feature-development-with-tests-and-i18n
+trigger: "when doing feature development with tests and i18n"
+confidence: 0.65
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/gclm/n8n
+---
+
+# N8n Workflow Feature Development With Tests And I18n
+
+## Action
+
+Follow the feature-development-with-tests-and-i18n workflow:
+1. Implement feature in relevant .vue, .ts, or .js files.
+2. Add or update corresponding test files (*.test.ts or *.test.js).
+3. Update i18n files for new/changed strings.
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~3x per month
+- Files: packages/frontend/editor-ui/src/**/*.vue, packages/frontend/editor-ui/src/**/*.ts, packages/frontend/editor-ui/src/**/*.test.ts
+
+---
+id: n8n-camelcase-filenames
+trigger: "When creating or renaming a file in the codebase"
+confidence: 0.85
+domain: code-style
+source: repo-analysis
+source_repo: gclm/n8n
+---
+
+# N8n Camelcase Filenames
+
+## Action
+
+Name the file using camelCase (e.g., myFile.ts)
+
+## Evidence
+
+- Pattern in namingConventions.files
+- Observed in packages/frontend/editor-ui/src/
+
+---
+id: n8n-camelcase-functions
+trigger: "When defining a function"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: gclm/n8n
+---
+
+# N8n Camelcase Functions
+
+## Action
+
+Name the function using camelCase
+
+## Evidence
+
+- Pattern in namingConventions.functions
+- Seen in TypeScript source files
+
+---
+id: n8n-pascalcase-classes
+trigger: "When defining a class"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: gclm/n8n
+---
+
+# N8n Pascalcase Classes
+
+## Action
+
+Name the class using PascalCase
+
+## Evidence
+
+- Pattern in namingConventions.classes
+- Seen in TypeScript class definitions
+
+---
+id: n8n-screaming-snake-constants
+trigger: "When defining a constant"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: gclm/n8n
+---
+
+# N8n Screaming Snake Constants
+
+## Action
+
+Name the constant using SCREAMING_SNAKE_CASE
+
+## Evidence
+
+- Pattern in namingConventions.constants
+- Seen in TypeScript source files
+
+---
+id: n8n-relative-imports
+trigger: "When importing modules within a package"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: gclm/n8n
+---
+
+# N8n Relative Imports
+
+## Action
+
+Use relative import paths
+
+## Evidence
+
+- Pattern in importStyle: relative
+- Observed in TypeScript import statements
+
+---
+id: n8n-named-exports
+trigger: "When exporting functions, classes, or constants"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: gclm/n8n
+---
+
+# N8n Named Exports
+
+## Action
+
+Use named exports
+
+## Evidence
+
+- Pattern in exportStyle: named
+- Seen in TypeScript source files
+
+---
+id: n8n-jest-test-pattern
+trigger: "When writing tests"
+confidence: 0.9
+domain: testing
+source: repo-analysis
+source_repo: gclm/n8n
+---
+
+# N8n Jest Test Pattern
+
+## Action
+
+Place test files alongside code, named with *.test.ts
+
+## Evidence
+
+- Pattern in testing.filePattern: *.test.ts
+- Seen in packages/@n8n/db/src/repositories/__tests__/*.test.ts
+
+---
+id: n8n-jest-mocking
+trigger: "When mocking dependencies in tests"
+confidence: 0.85
+domain: testing
+source: repo-analysis
+source_repo: gclm/n8n
+---
+
+# N8n Jest Mocking
+
+## Action
+
+Use jest.mock to mock modules
+
+## Evidence
+
+- Pattern in testing.mockingStyle: jest.mock
+- Seen in test files
+
+---
+id: n8n-test-coverage-config
+trigger: "When configuring tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: gclm/n8n
+---
+
+# N8n Test Coverage Config
+
+## Action
+
+Ensure test coverage is configured (e.g., via jest config)
+
+## Evidence
+
+- Pattern in testing.coverageConfig: true
+- Presence of jest config files
+
+---
+id: n8n-unit-and-integration-tests
+trigger: "When testing new or modified code"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: gclm/n8n
+---
+
+# N8n Unit And Integration Tests
+
+## Action
+
+Write both unit and integration tests as appropriate
+
+## Evidence
+
+- Pattern in testing.testTypes: unit, integration
+- Seen in test file organization
+
+---
+id: n8n-commit-prefixes
+trigger: "When writing a commit message"
+confidence: 0.9
+domain: git
+source: repo-analysis
+source_repo: gclm/n8n
+---
+
+# N8n Commit Prefixes
+
+## Action
+
+Prefix the commit message with 'fix:' or 'feat:' as appropriate
+
+## Evidence
+
+- Pattern in commits.prefixes
+- Seen in commit: 'feat: In the n8n Connect table...'
+- Seen in commit: 'fix: Stop persisting client id...'
+
+---
+id: n8n-release-commit-format
+trigger: "When committing a release"
+confidence: 0.85
+domain: git
+source: repo-analysis
+source_repo: gclm/n8n
+---
+
+# N8n Release Commit Format
+
+## Action
+
+Use ':rocket: Release x.y.z (#PR)' as the commit message
+
+## Evidence
+
+- Seen in commit: ':rocket: Release 2.18.5 (#29401)'
+- Seen in commit: ':rocket: Release 2.18.6 (#29611)'
+
+---
+id: n8n-merge-tag-format
+trigger: "When merging a release tag"
+confidence: 0.8
+domain: git
+source: repo-analysis
+source_repo: gclm/n8n
+---
+
+# N8n Merge Tag Format
+
+## Action
+
+Use 'Merge tag 'n8n@x.y.z' into branch' as the commit message
+
+## Evidence
+
+- Seen in commit: 'Merge tag 'n8n@2.18.6' into release-candidate/2.18.x'
+
+---
+id: n8n-release-version-bump
+trigger: "When a new release is being published"
+confidence: 0.98
+domain: workflow
+source: repo-analysis
+source_repo: gclm/n8n
+---
+
+# N8n Release Version Bump
+
+## Action
+
+Update CHANGELOG.md, bump versions in package.json files, commit and tag the release
+
+## Evidence
+
+- Workflow: release-version-bump
+- Files: CHANGELOG.md, package.json, packages/*/package.json
+- Commit sequence in workflow
+
+---
+id: n8n-add-or-modify-database-table
+trigger: "When a new database table is needed or an existing one is updated"
+confidence: 0.92
+domain: workflow
+source: repo-analysis
+source_repo: gclm/n8n
+---
+
+# N8n Add Or Modify Database Table
+
+## Action
+
+Create/update entity, add/update migration, update repository and index files, add/update related tests
+
+## Evidence
+
+- Workflow: add-or-modify-database-table
+- Files: packages/@n8n/db/src/entities/*.ts, ...
+- Commit sequence in workflow
+
+---
+id: n8n-feature-with-tests-and-i18n
+trigger: "When developing a new feature or enhancing an existing one"
+confidence: 0.88
+domain: workflow
+source: repo-analysis
+source_repo: gclm/n8n
+---
+
+# N8n Feature With Tests And I18n
+
+## Action
+
+Implement feature in code, add/update tests (*.test.ts), update i18n files for new/changed strings
+
+## Evidence
+
+- Workflow: feature-development-with-tests-and-i18n
+- Files: packages/frontend/editor-ui/src/**/*.vue, ...
+- Commit sequence in workflow
+
